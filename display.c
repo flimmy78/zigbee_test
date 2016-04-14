@@ -3,8 +3,33 @@
 #include <stdio.h>
 #include <assert.h>
 #include <time.h>
+#include <arpa/inet.h>
 
 #define TRACE_ACTIVATED     0
+
+typedef struct 
+{
+  uint8_t type;
+  uint8_t status;
+  uint16_t data;  
+} __attribute__((packed)) sensorData;
+
+typedef struct 
+{
+  uint8_t sensorDataNumber;
+  sensorData sensors[];
+} __attribute__((packed)) sensorFrameStruct;
+
+
+typedef struct 
+{
+  uint8_t dataType;
+  uint8_t counter;
+  union
+  {
+    sensorFrameStruct frame;
+  };
+} __attribute__((packed)) zb_payload_frame;
 
 
 void display_decodedType(zigbee_decodedFrame* decodedData)
@@ -59,21 +84,50 @@ void display_decodedType(zigbee_decodedFrame* decodedData)
           fprintf(stdout, "0x%x, ", decodedData->receivedPacket.payload[i]);
         fprintf(stdout, "\n");
         
-        uint8_t* payload;
+        zb_payload_frame* payload = (zb_payload_frame*) decodedData->receivedPacket.payload;
         uint16_t temp_raw;
         uint16_t humidity_raw;
-        float temp, humidity;
-        payload = decodedData->receivedPacket.payload;
-        temp_raw = (payload[4] << 8) | payload[5];
-        humidity_raw =  (payload[7] << 8) | payload[8];
+        uint16_t batt_raw;
+        float temp, humidity, batt;
+        temp_raw = ntohs(payload->frame.sensors[0].data);
+        humidity_raw = ntohs(payload->frame.sensors[1].data);
+        batt_raw = ntohs(payload->frame.sensors[2].data);
         
         humidity = (100.0 * humidity_raw) / 16383;
         temp = ((165.0* temp_raw) / 16383) - 40;
-        
+        batt = (batt_raw * 3.3)/1023;
         time_t t = time(NULL);
         struct tm tm = *localtime(&t);   
         fprintf(stdout, "now: %d-%d-%d %d:%d:%d : ", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-        fprintf(stdout, "temperature = %f°C, humidity = %f%%\n", temp, humidity);
+        fprintf(stdout, "type = %u, counter = %u, ", payload->dataType, payload->counter);
+        if (payload->frame.sensors[0].status == 0x03)
+        {
+          fprintf(stdout, "temperature = %f°C, ", temp);
+        }
+        else
+        {
+          fprintf(stdout, "temperature = --°C, ");
+        }
+
+        if (payload->frame.sensors[1].status == 0x03)
+        {
+          fprintf(stdout, "humidity = %f%%, ", humidity);
+        }
+        else
+        {
+          fprintf(stdout, "humidity = --%%, ");
+        }
+
+        if (payload->frame.sensors[2].status == 0x03)
+        {
+          fprintf(stdout, "batt = %fV --> %fVbatt\n", batt, (batt * (2.2+4.7))/2.2);
+        }
+        else
+        {
+          fprintf(stdout, "batt = --V\n");
+        }
+        
+        //temperature = %f°C, humidity = %f%% batt (%f V)\n", payload->dataType, payload->counter, temp, humidity, batt);
       }
     }
     break;

@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -10,6 +9,8 @@
 #include "zigbee_protocol.h"
 #include "display.h"
 #include <string.h>
+#include <syslog.h>
+
 
 uint32_t configure(zigbee_obj* zigbee);
 void read_hardware_data(zigbee_obj* obj);
@@ -37,6 +38,8 @@ int main(int argc, char** argv)
   {
     fprintf(stdout, "serial line ok, fd = %d\n", fd);
   }
+  
+  openlog("zb_controler", 0, LOG_USER);
   
   zigbee_protocol_initialize(&zigbee, fd, buffer, 50);
   
@@ -114,6 +117,7 @@ int main(int argc, char** argv)
     }
   }
   
+  closelog();
   return EXIT_SUCCESS;
 }
 
